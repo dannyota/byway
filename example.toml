@@ -1,0 +1,13 @@
+# Network interface to route bypassed traffic through.
+interface = "wwan0"
+
+# How often the reconciler checks that rules/routes are intact.
+# Lower = more resilient against VPN flushing, higher = less overhead.
+# Set "0" to disable.
+reconcile = "5s"
+
+# Apps to bypass VPN (absolute paths to binaries).
+apps = [
+    "/usr/bin/firefox",
+    "/usr/bin/curl",
+]
