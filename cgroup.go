@@ -69,6 +69,16 @@ func MovePID(pid uint32) error {
 	return nil
 }
 
+// isInBywayCgroup reports whether a process is already in the byway cgroup.
+func isInBywayCgroup(pid uint32) bool {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/cgroup", pid))
+	if err != nil {
+		return false
+	}
+	// cgroup v2: single line "0::/byway\n"
+	return strings.TrimSpace(string(data)) == "0::/byway"
+}
+
 // CgroupPIDs returns all PIDs currently in the byway cgroup.
 func CgroupPIDs() ([]uint32, error) {
 	data, err := os.ReadFile(filepath.Join(cgroupPath, "cgroup.procs"))

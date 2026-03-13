@@ -114,6 +114,14 @@ func (d *Daemon) Run(ctx context.Context) error {
 		})
 	}
 
+	// Route monitor — react immediately to route changes instead of
+	// waiting for the next reconcile tick. Especially important in
+	// shared-interface mode where the VPN may flush routes.
+	g.Go(func() error {
+		rm := NewRouteMonitor(d.route.Link(), d.reconciler, d.logger)
+		return rm.Run(gctx)
+	})
+
 	return g.Wait()
 }
 

@@ -94,6 +94,12 @@ func (p *ProcMon) Run(ctx context.Context) error {
 		return fmt.Errorf("binding netlink socket: %w", err)
 	}
 
+	// Increase receive buffer to 2 MiB to avoid ENOBUFS under heavy fork load.
+	// SO_RCVBUFFORCE bypasses the sysctl net.core.rmem_max limit (requires CAP_NET_ADMIN).
+	if err := unix.SetsockoptInt(sock, unix.SOL_SOCKET, unix.SO_RCVBUFFORCE, 2*1024*1024); err != nil {
+		p.logger.Warn("setting netlink receive buffer (falling back to default)", "err", err)
+	}
+
 	if err := p.subscribe(sock, procCnMcastListen); err != nil {
 		return fmt.Errorf("subscribing to proc events: %w", err)
 	}
@@ -124,6 +130,10 @@ func (p *ProcMon) Run(ctx context.Context) error {
 		n, _, err := unix.Recvfrom(sock, buf, 0)
 		if err != nil {
 			if errors.Is(err, unix.EAGAIN) || errors.Is(err, unix.EWOULDBLOCK) || errors.Is(err, unix.EINTR) {
+				continue
+			}
+			if errors.Is(err, unix.ENOBUFS) {
+				p.logger.Warn("netlink buffer overflow, some exec events may have been missed")
 				continue
 			}
 			select {
@@ -211,6 +221,9 @@ func (p *ProcMon) handleExec(pid uint32) {
 	p.mu.RUnlock()
 
 	if match {
+		if isInBywayCgroup(pid) {
+			return
+		}
 		if err := MovePID(pid); err != nil {
 			p.logger.Warn("moving PID to cgroup", "pid", pid, "exe", exePath, "err", err)
 		} else {

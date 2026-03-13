@@ -15,6 +15,7 @@ type Reconciler struct {
 	cgroupID   uint64
 	fwmark     uint32
 	intervalCh chan time.Duration
+	triggerCh  chan struct{}
 	logger     *slog.Logger
 }
 
@@ -26,7 +27,17 @@ func NewReconciler(nft *NFT, route *Route, procmon *ProcMon, cgroupID uint64, fw
 		cgroupID:   cgroupID,
 		fwmark:     fwmark,
 		intervalCh: make(chan time.Duration, 1),
+		triggerCh:  make(chan struct{}, 1),
 		logger:     logger,
+	}
+}
+
+// Trigger requests an immediate reconciliation cycle.
+// Non-blocking: multiple triggers between cycles coalesce into one.
+func (r *Reconciler) Trigger() {
+	select {
+	case r.triggerCh <- struct{}{}:
+	default:
 	}
 }
 
@@ -50,6 +61,9 @@ func (r *Reconciler) Run(ctx context.Context, interval time.Duration) error {
 		case newInterval := <-r.intervalCh:
 			ticker.Reset(newInterval)
 			r.logger.Info("reconcile interval updated", "interval", newInterval)
+		case <-r.triggerCh:
+			r.reconcileOnce()
+			ticker.Reset(interval)
 		case <-ticker.C:
 			r.reconcileOnce()
 		}

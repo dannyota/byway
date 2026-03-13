@@ -60,8 +60,13 @@ func (n *NFT) Adopt() bool {
 // routing after the fwmark is set.
 func (n *NFT) Setup(cgroupID uint64, fwmark uint32) error {
 	// Delete any existing table for idempotency.
-	n.conn.DelTable(&nftables.Table{Family: nftables.TableFamilyINet, Name: nftTableName})
-	n.conn.Flush() // ignore error — table may not exist
+	// Look up the actual table handle so the delete is valid in the batch;
+	// if it doesn't exist we simply skip the delete. Everything is applied
+	// in a single Flush for atomicity — no gap where packets are unmarked.
+	tables, _ := n.conn.ListTables()
+	if existing := findTable(tables); existing != nil {
+		n.conn.DelTable(existing)
+	}
 
 	n.table = n.conn.AddTable(&nftables.Table{
 		Family: nftables.TableFamilyINet,

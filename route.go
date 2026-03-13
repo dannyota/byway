@@ -212,6 +212,13 @@ func (r *Route) Gateway() net.IP {
 	return r.gateway
 }
 
+// Link returns the netlink link for the configured interface.
+func (r *Route) Link() netlink.Link {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.link
+}
+
 // UpdateInterface tears down existing rules/routes and sets up new ones for a different interface.
 // Validates the new interface exists before tearing down the old one.
 func (r *Route) UpdateInterface(iface string) error {
